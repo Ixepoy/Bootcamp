@@ -1,11 +1,9 @@
 streamlit
 deepface
 pandas
-Pillow
+pillow
 reportlab
 streamlit-webrtc
-numpy
-tensorflow-cpu
-deepface
-streamlit-webrtc
 tf-keras
+tensorflow-cpu
+opencv-python-headless
