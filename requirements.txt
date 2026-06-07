@@ -1,0 +1,8 @@
+streamlit
+deepface
+pandas
+Pillow
+reportlab
+streamlit-webrtc
+numpy
+tensorflow-cpu
