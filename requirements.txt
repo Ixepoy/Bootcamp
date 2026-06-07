@@ -6,3 +6,6 @@ reportlab
 streamlit-webrtc
 numpy
 tensorflow-cpu
+deepface
+streamlit-webrtc
+tf-keras
