@@ -371,50 +371,47 @@ with socmint_tab1:
         # FITUR BARU: API OPENWEBNINJA (REVERSE IMAGE SEARCH)
         # =====================================================
         st.divider()
-        st.subheader("🤖 Otomatis: Pencarian via API OpenWebNinja (RapidAPI)")
-        
-        api_key = "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti";
+        st.subheader("🤖 Otomatis: Pencarian via API OpenWebNinja")
         
         if st.button("🔍 Jalankan Reverse Image API"):
-            if not api_key:
-                st.warning("⚠️ Harap masukkan API Key terlebih dahulu.")
-            else:
-                with st.spinner("Mengirim gambar ke server intelijen... Mohon tunggu..."):
-                    try:
-                        # Endpoint dan Headers disesuaikan dengan standar OpenWebNinja di RapidAPI
-                        url = "https://api.openwebninja.com/realtime-image-search"
+            with st.spinner("Mengirim gambar ke server intelijen... Mohon tunggu..."):
+                try:
+                    # ⚠️ GANTI URL DI BAWAH INI DENGAN ENDPOINT DARI DASHBOARD OPENWEBNINJA ANDA
+                    # Contoh format URL: "https://api.openwebninja.com/reverse-image-search/search"
+                    url = "https://api.openwebninja.com/MASUKKAN_NAMA_ENDPOINT_YANG_BENAR"
+                    
+                    headers = { 'x-api-key': "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti" }
+                    
+                    files = {
+                        "image": open(path_socmint, "rb")
+                    }
+                    
+                    # Eksekusi API Upload
+                    response = requests.post(url, headers=headers, files=files)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        st.success("✅ Hasil pencarian berhasil dimuat!")
                         
-                        headers = { 'x-api-key': api_key }
+                        # Menampilkan JSON murni agar Anda bisa melihat datanya
+                        with st.expander("Lihat Respons JSON Lengkap", expanded=False):
+                            st.json(data)
                         
-                        # Mengirim gambar dalam format multipart/form-data
-                        files = {
-                            "image": open(path_socmint, "rb")
-                        }
-                        
-                        response = requests.post(url, headers=headers, files=files)
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            st.success("✅ Hasil pencarian berhasil dimuat!")
-                            
-                            # Tampilkan hasil JSON secara dinamis
-                            with st.expander("Lihat Respons JSON Lengkap", expanded=False):
-                                st.json(data)
-                            
-                            # Coba ekstrak data (menyesuaikan struktur respon Google Lens)
-                            if "visual_matches" in data:
-                                st.write("**Daftar Situs yang Memuat Wajah Target:**")
-                                for item in data["visual_matches"]:
-                                    link = item.get("link", "#")
-                                    title = item.get("title", "Tidak ada judul")
-                                    st.markdown(f"- [{title}]({link})")
-                            else:
-                                st.info("Tidak ada kecocokan visual yang spesifik di respon JSON. Silakan cek data lengkap di atas.")
-
+                        # Mengekstrak data Visual Matches 
+                        response_data = data.get("data", data) # Antisipasi struktur data bersarang
+                        if "visual_matches" in response_data:
+                            st.write("**Daftar Situs yang Memuat Wajah Target:**")
+                            for item in response_data["visual_matches"]:
+                                link = item.get("link", "#")
+                                title = item.get("title", "Tidak ada judul")
+                                st.markdown(f"- [{title}]({link})")
                         else:
-                            st.error(f"❌ API Error: {response.status_code} - {response.text}")
-                    except Exception as e:
-                        st.error(f"Terjadi kesalahan saat menghubungi API: {e}")
+                            st.info("Tidak ada kecocokan visual spesifik di respon JSON. Silakan cek detail JSON di atas.")
+
+                    else:
+                        st.error(f"❌ API Error: {response.status_code} - {response.text}")
+                except Exception as e:
+                    st.error(f"Terjadi kesalahan saat menghubungi API: {e}")
 
         # =====================================================
         # PENCARIAN MANUAL (BACKUP)
