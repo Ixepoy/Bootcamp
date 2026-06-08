@@ -6,7 +6,6 @@ import tempfile
 import datetime
 import os
 import urllib.parse
-import base64
 from PIL.ExifTags import TAGS
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -20,6 +19,10 @@ from tensorflow.keras.utils import load_img, img_to_array
 import cv2
 import av
 import requests  
+
+# Inisialisasi Session State untuk menyimpan hasil pencarian API
+if "socmint_results" not in st.session_state:
+    st.session_state.socmint_results = []
 
 # =====================
 # FUNGSI DETEKSI & UTILITY
@@ -211,7 +214,7 @@ with tab1:
                     untuk mengidentifikasi identitas seseorang secara pasti.
                     """
                     st.info(overview)
-                   
+                    
                     pdf_file = generate_pdf(data["age"], data["dominant_gender"], data["dominant_emotion"], overview)
                     with open(pdf_file, "rb") as f:
                         st.download_button("📄 Download PDF Report", f, "report.pdf", "application/pdf")
@@ -326,7 +329,7 @@ with tab4:
         total_rows = len(df)
         total_pages = max(1, (total_rows + page_size - 1) // page_size)
 
-        page = st.number_input("Halaman", min_value=1, max_value=total_pages, value=1)
+        page = st.number_input("Halaman Riwayat", min_value=1, max_value=total_pages, value=1)
         start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
 
@@ -371,10 +374,7 @@ with socmint_tab1:
         if st.button("🔍 Jalankan Reverse Image API"):
             image_url = None
             
-            # --- TAHAP 1: PROSES UPLOAD MULTI-SERVER ---
             with st.spinner("1️⃣ Mengunggah foto target ke server cadangan sementara..."):
-                
-                # Kandidat 1: Tmpfiles.org 
                 try:
                     with open(path_socmint, "rb") as f:
                         resp = requests.post("https://tmpfiles.org/api/v1/upload", files={"file": f}, timeout=10)
@@ -383,57 +383,48 @@ with socmint_tab1:
                             raw_url = res_json.get("data", {}).get("url", "")
                             if raw_url:
                                 image_url = raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
-                except Exception as e:
+                except Exception:
                     pass 
                 
-                # Kandidat 2: Catbox.moe 
                 if not image_url:
                     try:
                         with open(path_socmint, "rb") as f:
                             resp = requests.post("https://catbox.moe/user/api.php", data={"reqtype": "fileupload"}, files={"fileToUpload": f}, timeout=10)
                             if resp.status_code == 200 and "https://" in resp.text:
                                 image_url = resp.text.strip()
-                    except Exception as e:
+                    except Exception:
                         pass
 
-                # Kandidat 3: File.io 
                 if not image_url:
                     try:
                         with open(path_socmint, "rb") as f:
                             resp = requests.post("https://file.io", files={"file": f}, timeout=10)
                             if resp.status_code == 200:
                                 image_url = resp.json().get("link")
-                    except Exception as e:
+                    except Exception:
                         pass
 
-            # --- TAHAP 2: KIRIM URL KE OPENWEBNINJA ---
             if image_url:
                 st.info(f"🔗 Link publik foto diperoleh: {image_url}")
                 with st.spinner("2️⃣ Mengirim foto publik ke mesin OpenWebNinja..."):
                     try:
                         url = "https://api.openwebninja.com/reverse-image-search/reverse-image-search"
                         querystring = {"url": image_url}
-                        headers = {
-                          "X-API-Key": "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti"
-                        }
+                        headers = {"X-API-Key": "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti"}
                         
                         response = requests.get(url, headers=headers, params=querystring, timeout=80)
                         
                         if response.status_code == 200:
                             data = response.json()
-                            
-                            # Mengekstrak hasil dari JSON yang strukturnya dinamis
                             result_data = data.get("data", data)
                             matches = []
                             
-                            # Logika pintar untuk menarik data array meskipun nama key-nya kosong ("")
                             if isinstance(result_data, dict):
                                 if "visual_matches" in result_data:
                                     matches = result_data["visual_matches"]
                                 elif "" in result_data and isinstance(result_data[""], list):
                                     matches = result_data[""]
                                 else:
-                                    # Fallback: Cari array/list apa pun di dalam data
                                     for key, value in result_data.items():
                                         if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
                                             matches.extend(value)
@@ -441,48 +432,106 @@ with socmint_tab1:
                                 matches = result_data
 
                             if matches:
-                                st.success(f"✅ Pelacakan Selesai! Ditemukan {len(matches)} jejak digital.")
-                                st.subheader("🌐 Website yang memiliki gambar serupa")
-                                
-                                # Menampilkan dalam bentuk modern list/card
-                                for item in matches:
-                                    link = item.get("link", item.get("url", "#"))
-                                    title = item.get("title", "Tidak ada judul")
-                                    thumbnail = item.get("thumbnail", item.get("image", ""))
-                                    
-                                    # Mengambil nama domain website secara rapi
-                                    domain_source = urllib.parse.urlparse(link).netloc
-                                    source = item.get("source", item.get("domain", domain_source))
-                                    
-                                    # Membuat antarmuka bergaya "Card" dengan container bergaris
-                                    with st.container(border=True):
-                                        col_img, col_info = st.columns([1, 5]) # Tata letak lebar kolom
-                                        
-                                        with col_img:
-                                            if thumbnail:
-                                                st.image(thumbnail, use_container_width=True)
-                                            else:
-                                                st.markdown("<h3>🌐</h3>", unsafe_allow_html=True)
-                                                
-                                        with col_info:
-                                            st.markdown(f"**{title}**")
-                                            st.caption(f"Sumber: `{source}`")
-                                            # Membuat tombol full-width
-                                            st.link_button("Kunjungi Situs Pelacakan ↗️", link, use_container_width=True)
+                                # SIMPAN KE SESSION STATE
+                                st.session_state.socmint_results = matches
+                                st.success(f"✅ Pelacakan Selesai! Mengambil {len(matches)} jejak digital.")
+                                st.rerun()  # Muat ulang UI untuk memunculkan panel filter & hasil
                             else:
                                 st.info("Tidak ada kecocokan situs web spesifik di respon API.")
-                                
-                            # Opsi bagi analis untuk tetap melihat struktur asli log-nya (disembunyikan)
-                            with st.expander("Lihat Respons JSON Mentah (Untuk Tim Analis)", expanded=False):
-                                st.json(data)
-                                
                         else:
                             st.error(f"❌ API Error OpenWebNinja: {response.status_code} - {response.text}")
-                    
                     except Exception as e:
                         st.error(f"Terjadi kesalahan saat memproses OpenWebNinja: {e}")
             else:
-                st.error("❌ Semua server unggah gambar sementara (Tmpfiles, Catbox, File.io) gagal merespon. Silakan periksa koneksi internet Anda atau gunakan pencarian manual di bawah.")
+                st.error("❌ Semua server unggah gambar sementara gagal merespon.")
+
+        # =====================================================
+        # MENAMPILKAN HASIL DENGAN FILTER & PAGINATION
+        # =====================================================
+        if len(st.session_state.socmint_results) > 0:
+            st.divider()
+            st.subheader("🌐 Hasil Pencarian Digital")
+            
+            # --- BAR PENCARIAN & FILTER ---
+            col_search, col_filter = st.columns([2, 1])
+            with col_search:
+                search_query = st.text_input("🔍 Cari *keyword* pada Judul atau URL:")
+            with col_filter:
+                filter_option = st.selectbox("📌 Filter Platform:", [
+                    "Semua", "Instagram", "Facebook", "X (Twitter)", 
+                    "LinkedIn", "TikTok", "Non-Social Media"
+                ])
+
+            # --- LOGIKA FILTERING ---
+            all_matches = st.session_state.socmint_results
+            filtered_matches = []
+            
+            social_domains = ["instagram.com", "facebook.com", "twitter.com", "x.com", "linkedin.com", "tiktok.com"]
+
+            for item in all_matches:
+                link = item.get("link", item.get("url", "")).lower()
+                title = item.get("title", "Tidak ada judul").lower()
+
+                # Filter text (search bar)
+                if search_query and search_query.lower() not in link and search_query.lower() not in title:
+                    continue
+
+                # Filter dropdown platform
+                is_social = any(soc in link for soc in social_domains)
+                
+                if filter_option == "Instagram" and "instagram.com" not in link: continue
+                if filter_option == "Facebook" and "facebook.com" not in link: continue
+                if filter_option == "X (Twitter)" and not ("twitter.com" in link or "x.com" in link): continue
+                if filter_option == "LinkedIn" and "linkedin.com" not in link: continue
+                if filter_option == "TikTok" and "tiktok.com" not in link: continue
+                if filter_option == "Non-Social Media" and is_social: continue
+
+                filtered_matches.append(item)
+
+            # --- PAGINASI (PAGINATION) ---
+            items_per_page = 10
+            total_items = len(filtered_matches)
+            
+            if total_items == 0:
+                st.warning("Pencarian/Filter tidak menemukan hasil yang cocok.")
+            else:
+                total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
+                
+                # Navigasi Halaman
+                page = st.number_input(f"Pilih Halaman (Total {total_pages} Hal.)", min_value=1, max_value=total_pages, value=1)
+                start_idx = (page - 1) * items_per_page
+                end_idx = start_idx + items_per_page
+                
+                current_items = filtered_matches[start_idx:end_idx]
+                
+                st.caption(f"Menampilkan {start_idx+1}-{min(end_idx, total_items)} dari {total_items} data spesifik.")
+                
+                # --- RENDER CARD ---
+                for item in current_items:
+                    link = item.get("link", item.get("url", "#"))
+                    title = item.get("title", "Tidak ada judul")
+                    thumbnail = item.get("thumbnail", item.get("image", ""))
+                    
+                    domain_source = urllib.parse.urlparse(link).netloc
+                    source = item.get("source", item.get("domain", domain_source))
+                    
+                    with st.container(border=True):
+                        col_img, col_info = st.columns([1, 5])
+                        
+                        with col_img:
+                            if thumbnail:
+                                st.image(thumbnail, use_container_width=True)
+                            else:
+                                st.markdown("<h3>🌐</h3>", unsafe_allow_html=True)
+                                
+                        with col_info:
+                            st.markdown(f"**{title}**")
+                            st.caption(f"Sumber: `{source}`")
+                            st.link_button("Kunjungi Situs Pelacakan ↗️", link, use_container_width=True)
+                            
+            if st.button("🗑️ Bersihkan Hasil Pencarian"):
+                st.session_state.socmint_results = []
+                st.rerun()
 
         # =====================================================
         # PENCARIAN MANUAL (BACKUP)
