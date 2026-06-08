@@ -494,21 +494,7 @@ with socmint_tab1:
             st.session_state.socmint_results = []
             st.rerun()
 
-    # =====================================================
-    # PENCARIAN MANUAL (BACKUP)
-    # =====================================================
-    st.divider()
-    st.subheader("🔗 Manual: Pencarian Mesin Publik")
-    st.write("Gunakan drag-and-drop jika sistem API di atas sedang mencapai batas limit (kuota).")
-    
-    col_yandex, col_google, col_bing = st.columns(3)
-    with col_yandex:
-        st.link_button("Cari di Yandex Images ↗️", "https://yandex.com/images/", use_container_width=True)
-    with col_google:
-        st.link_button("Cari di Google Lens ↗️", "https://images.google.com/", use_container_width=True)
-    with col_bing:
-        st.link_button("Cari di Bing Visual ↗️", "https://www.bing.com/images/feed", use_container_width=True)
-        
+   
 
 # -----------------------------------------
 # TAB SOCMINT 2: TEXT & DORKING SEARCH
