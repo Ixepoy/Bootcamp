@@ -254,19 +254,22 @@ with tab2:
                 try:
                     result = DeepFace.verify(img1_path=path1, img2_path=path2, enforce_detection=False)
                     distance = result["distance"]
-
+                    
+                    similarity = (1 - distance) * 100
+                    if similarity < 0: 
+                        similarity = 0
+                    
+                    # 2. JALANKAN LOGIKA PENGECEKAN
                     if result["verified"]:
-                        tempsiml = similarity.2f
-                        if tempsiml > 80 :
+                        # Langsung bandingkan variabel similarity sebagai angka (float)
+                        if similarity > 80:
                             st.success("✅ Wajah Cocok")
                         else:
-                            st.error("❌ Wajah Tidak Cocok")
+                            st.error("❌ Wajah Tidak Cocok (Kemiripan di bawah 80%)")
                     else:
                         st.error("❌ Wajah Tidak Cocok")
-
-                    similarity = (1 - distance) * 100
-                    if similarity < 0: similarity = 0
-
+                    
+                    # 3. TAMPILKAN METRIK (Format .2f ditaruh di sini)
                     st.metric("Similarity Score", f"{similarity:.2f}%")
                     st.subheader("🤖 AI Overview")
 
