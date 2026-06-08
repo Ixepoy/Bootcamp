@@ -12,12 +12,9 @@ from reportlab.platypus import (
 )
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
-from streamlit_webrtc import webrtc_streamer, RTCConfiguration
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.utils import load_img, img_to_array
-import cv2
-import av
 import requests
 
 # ==========================================
@@ -97,28 +94,6 @@ def get_exif_data(image):
     return exif_data
 
 
-# ==========================================
-# KONFIGURASI & CALLBACK LIVE CAMERA (WebRTC)
-# ==========================================
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
-
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-
-def video_frame_callback(frame):
-    img = frame.to_ndarray(format="bgr24")
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-    
-    for (x, y, w, h) in faces:
-        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        cv2.putText(img, "Target Terdeteksi", (x, y - 10), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        
-    return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-
 # =====================
 # CONFIG DASHBOARD
 # =====================
@@ -130,10 +105,9 @@ st.set_page_config(
 
 st.title("🕵️ OSINT Face Intelligence Dashboard")
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3 = st.tabs([
     "Face Analysis",
     "Face Matching",
-    "Live Camera",
     "Riwayat Analisis"
 ])
 
@@ -306,24 +280,9 @@ with tab2:
                     st.error(f"Terjadi error: {e}")
 
 # ==================================================
-# LIVE CAMERA (TAB 3)
+# RIWAYAT ANALISIS (TAB 3)
 # ==================================================
 with tab3:
-    st.header("📷 Live Camera")
-    st.info("Klik tombol 'Start' di bawah untuk mengaktifkan kamera.")
-
-    webrtc_streamer(
-        key="camera-live-stream",
-        video_frame_callback=video_frame_callback,
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True
-    )
-
-# ==================================================
-# RIWAYAT ANALISIS (TAB 4)
-# ==================================================
-with tab4:
     st.header("📜 Riwayat Analisis")
     if os.path.exists("logs.csv"):
         df = pd.read_csv("logs.csv")
