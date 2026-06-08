@@ -4,6 +4,5 @@ pandas
 pillow
 reportlab
 streamlit-webrtc
-tf-keras
-tensorflow-cpu
-opencv-python-headless
+numpy>=1.24.0,<2.0.0
+tensorflow-cpu==2.16.1
