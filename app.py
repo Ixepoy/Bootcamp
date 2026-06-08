@@ -418,7 +418,7 @@ with socmint_tab1:
                           "X-API-Key": "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti"
                         }
                         
-                        response = requests.get(url, headers=headers, params=querystring, timeout=20)
+                        response = requests.get(url, headers=headers, params=querystring, timeout=80)
                         
                         if response.status_code == 200:
                             data = response.json()
