@@ -9,22 +9,23 @@ import urllib.parse
 import base64
 from PIL.ExifTags import TAGS
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table,TableStyle
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 )
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
-from streamlit_webrtc import webrtc_streamer
+from streamlit_webrtc import webrtc_streamer, RTCConfiguration
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 from tensorflow.keras.utils import load_img, img_to_array
+import cv2
+import av
+import requests  # TAMBAHAN: Untuk memanggil API OpenWebNinja
 
 # =====================
-# FUNGSI
+# FUNGSI DETEKSI & UTILITY
 # =====================
 def cek_wajah(path):
     try:
-        # Ubah enforce_detection menjadi False
         faces = DeepFace.extract_faces(
             img_path=path,
             enforce_detection=False 
@@ -33,11 +34,9 @@ def cek_wajah(path):
     except:
         return False
 
-# ----- TAMBAHKAN FUNGSI LOAD MODEL MASKER DI BAWAHNYA -----
 @st.cache_resource
 def load_mask_model():
     try:
-        # Panggil file .keras yang baru
         model = tf.keras.models.load_model('model_wajah.keras')
         return model
     except Exception as e:
@@ -45,115 +44,79 @@ def load_mask_model():
 
 mask_model = load_mask_model()
 
-def generate_pdf(
-    age,
-    gender,
-    emotion,
-    overview
-):
-
+def generate_pdf(age, gender, emotion, overview):
     filename = "face_report.pdf"
-
-    doc = SimpleDocTemplate(
-        filename
-    )
-
+    doc = SimpleDocTemplate(filename)
     styles = getSampleStyleSheet()
-
     elements = []
 
-    elements.append(
-        Paragraph(
-            "OSINT Face Intelligence Report",
-            styles["Title"]
-        )
-    )
-
-    elements.append(
-        Spacer(1,20)
-    )
+    elements.append(Paragraph("OSINT Face Intelligence Report", styles["Title"]))
+    elements.append(Spacer(1, 20))
 
     data = [
-        ["Parameter","Hasil"],
+        ["Parameter", "Hasil"],
         ["Age", str(age)],
         ["Gender", gender],
         ["Emotion", emotion]
     ]
 
-    table = Table(
-        data,
-        colWidths=[150,250]
-    )
-
+    table = Table(data, colWidths=[150, 250])
     table.setStyle(
         TableStyle([
-            ("BACKGROUND",(0,0),(-1,0),colors.grey),
-            ("TEXTCOLOR",(0,0),(-1,0),colors.whitesmoke),
-
-            ("GRID",(0,0),(-1,-1),1,colors.black),
-
-            ("BACKGROUND",(0,1),(-1,-1),colors.beige)
+            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("GRID", (0, 0), (-1, -1), 1, colors.black),
+            ("BACKGROUND", (0, 1), (-1, -1), colors.beige)
         ])
     )
 
     elements.append(table)
-
-    elements.append(
-        Spacer(1,20)
-    )
-
-    elements.append(
-        Paragraph(
-            "AI Overview",
-            styles["Heading2"]
-        )
-    )
-
-    elements.append(
-        Paragraph(
-            overview,
-            styles["BodyText"]
-        )
-    )
-
-    elements.append(
-        Spacer(1,20)
-    )
-
-    elements.append(
-        Paragraph(
-            f"Generated: {datetime.datetime.now()}",
-            styles["Italic"]
-        )
-    )
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph("AI Overview", styles["Heading2"]))
+    elements.append(Paragraph(overview, styles["BodyText"]))
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph(f"Generated: {datetime.datetime.now()}", styles["Italic"]))
 
     doc.build(elements)
-
     return filename
 
 def get_exif_data(image):
-
     exif_data = {}
-
     try:
-
         exif = image.getexif()
-
         for tag_id, value in exif.items():
-
             tag = TAGS.get(tag_id, tag_id)
-
             exif_data[tag] = value
-
     except:
         pass
-
     return exif_data
 
-# =====================
-# CONFIG
-# =====================
 
+# ==========================================
+# KONFIGURASI & CALLBACK LIVE CAMERA (WebRTC)
+# ==========================================
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+
+def video_frame_callback(frame):
+    img = frame.to_ndarray(format="bgr24")
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    
+    for (x, y, w, h) in faces:
+        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        cv2.putText(img, "Target Terdeteksi", (x, y - 10), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        
+    return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+
+# =====================
+# CONFIG DASHBOARD
+# =====================
 st.set_page_config(
     page_title="OSINT Face Intelligence Dashboard",
     page_icon="🕵️",
@@ -170,93 +133,59 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ==================================================
-# FACE ANALYSIS
+# FACE ANALYSIS (TAB 1)
 # ==================================================
-
 with tab1:
-
     st.header("Analisis Wajah")
 
-    sumber = st.radio(
-    "Pilih Sumber Gambar",
-    [
-        "Upload File",
-        "Kamera"
-    ]
-    )
+    sumber = st.radio("Pilih Sumber Gambar", ["Upload File", "Kamera"])
     if sumber == "Upload File":
-        uploaded = st.file_uploader(
-            "Upload Foto Wajah",
-            type=["jpg","jpeg","png"]
-            )
+        uploaded = st.file_uploader("Upload Foto Wajah", type=["jpg", "jpeg", "png"])
     else:
-        uploaded = st.camera_input(
-            "Ambil Foto"
-            )
+        uploaded = st.camera_input("Ambil Foto")
 
     if uploaded:
-
         image = Image.open(uploaded)
+        st.image(image, width=300)
 
-        st.image(
-            image,
-            width=300
-        )
         # ==============
         # METADATA FOTO
         # ==============
         with st.expander("📷 Lihat Metadata Foto"):
             metadata = get_exif_data(image)
             if metadata:
-                # Mengubah metadata menjadi dataframe agar rapi
                 df_meta = pd.DataFrame(list(metadata.items()), columns=['Tag', 'Value'])
                 st.dataframe(df_meta, use_container_width=True, hide_index=True)
             else:
                 st.info("Metadata EXIF tidak ditemukan pada gambar ini.")
             
-        with tempfile.NamedTemporaryFile(
-            delete=False,
-            suffix=".jpg"
-        ) as tmp:
-            tmp.write(
-                uploaded.getbuffer()
-            )
-
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+            tmp.write(uploaded.getbuffer())
             img_path = tmp.name
 
         if st.button("Analisis Wajah"):
             if not cek_wajah(img_path):
-                st.error(
-                    "❌ Gambar bukan wajah manusia atau wajah tidak terdeteksi."
-                )
+                st.error("❌ Gambar bukan wajah manusia atau wajah tidak terdeteksi.")
             else:
                 try:
                     result = DeepFace.analyze(
                         img_path=img_path,
                         actions=["age", "gender", "emotion"],
-                        enforce_detection=False # <-- Ubah jadi False
+                        enforce_detection=False
                     )
 
                     data = result[0]
                     st.success("✅ Analisis Selesai")
                     
-                    # ==========================================
-                    # LOGIKA AI DETEKSI MASKER (DARI COLAB)
-                    # ==========================================
                     status_masker = "Tidak Diketahui"
                     if mask_model is not None:
                         try:
-                            # Load gambar untuk AI Masker (ukuran 128x128 sesuai Colab)
-                            # KODE YANG BARU:
                             img_test = load_img(img_path, target_size=(128, 128))
                             img_array = img_to_array(img_test)
                             img_array = np.expand_dims(img_array, axis=0)
                             img_array = img_array / 255.0
 
-                            # AI Menebak
                             prediction = mask_model.predict(img_array, verbose=0)
-                            
-                            # Logika Colab: > 0.5 = Tanpa Masker
                             if prediction[0][0] > 0.5:
                                 status_masker = "Tanpa Masker ❌"
                             else:
@@ -266,21 +195,13 @@ with tab1:
                             st.warning(f"AI Masker melewati gambar ini. Info: {e}")
                     else:
                         status_masker = "Tidak Diketahui"
-                    # ==========================================
 
-                    # Tampilkan menjadi 4 Kolom
                     col1, col2, col3, col4 = st.columns(4)
+                    with col1: st.metric("Umur", data["age"])
+                    with col2: st.metric("Gender", data["dominant_gender"])
+                    with col3: st.metric("Emosi", data["dominant_emotion"])
+                    with col4: st.metric("Status Masker", status_masker)
 
-                    with col1:
-                        st.metric("Umur", data["age"])
-                    with col2:
-                        st.metric("Gender", data["dominant_gender"])
-                    with col3:
-                        st.metric("Emosi", data["dominant_emotion"])
-                    with col4:
-                        st.metric("Status Masker", status_masker) # Menampilkan status masker
-
-                    # Update juga teks di AI Overview
                     st.subheader("🤖 AI Overview")
                     overview = f"""
                     Berdasarkan analisis AI:
@@ -289,127 +210,57 @@ with tab1:
                     • Emosi dominan yang terlihat adalah {data['dominant_emotion']}.
                     • Status Masker: {status_masker}.
                     
-                    Catatan:
-                    Hasil ini merupakan estimasi AI dan tidak dapat digunakan
+                    Catatan: Hasil ini merupakan estimasi AI dan tidak dapat digunakan
                     untuk mengidentifikasi identitas seseorang secara pasti.
                     """
                     st.info(overview)
                    
-                    # ====
-                    # PDF DOWNLOAD(gk jadi)
-                    # ====
-                    pdf_file = generate_pdf(
-                        data["age"],
-                        data["dominant_gender"],
-                        data["dominant_emotion"],
-                        overview
-                        )
+                    pdf_file = generate_pdf(data["age"], data["dominant_gender"], data["dominant_emotion"], overview)
                     with open(pdf_file, "rb") as f:
-                        st.download_button(
-                            "📄 Download PDF Report",
-                            f,
-                            "report.pdf",
-                            "application/pdf"
-                            )
-                    # =====================
-                    # SIMPAN LOG
-                    # =====================
-
+                        st.download_button("📄 Download PDF Report", f, "report.pdf", "application/pdf")
+                    
                     log = pd.DataFrame([{
-                        "timestamp":
-                        datetime.datetime.now(),
-
-                        "age":
-                        data["age"],
-
-                        "gender":
-                        data["dominant_gender"],
-
-                        "emotion":
-                        data["dominant_emotion"]
+                        "timestamp": datetime.datetime.now(),
+                        "age": data["age"],
+                        "gender": data["dominant_gender"],
+                        "emotion": data["dominant_emotion"]
                     }])
 
-                    if os.path.exists(
-                        "logs.csv"
-                    ):
+                    if os.path.exists("logs.csv"):
+                        old = pd.read_csv("logs.csv")
+                        log = pd.concat([old, log], ignore_index=True)
 
-                        old = pd.read_csv(
-                            "logs.csv"
-                        )
-
-                        log = pd.concat(
-                            [old, log],
-                            ignore_index=True
-                        )
-
-                    log.to_csv(
-                        "logs.csv",
-                        index=False
-                    )
+                    log.to_csv("logs.csv", index=False)
 
                 except Exception as e:
+                    st.error(f"Terjadi error: {e}")
 
-                    st.error(
-                        f"Terjadi error: {e}"
-                    )
 # ==================================================
-# FACE MATCHING
+# FACE MATCHING (TAB 2)
 # ==================================================
 with tab2:
-
     st.header("Face Matching")
-
     st.subheader("Target")
     
-    target_source = st.radio(
-        "Sumber Target",
-        ["Upload", "Kamera"],
-        key="target_source"
-    )
+    target_source = st.radio("Sumber Target", ["Upload", "Kamera"], key="target_source")
     
     if target_source == "Upload":
-        img1 = st.file_uploader(
-            "Upload Target",
-            type=["jpg", "jpeg", "png"],
-            key="img1"
-        )
+        img1 = st.file_uploader("Upload Target", type=["jpg", "jpeg", "png"], key="img1")
     else:
-        img1 = st.camera_input(
-            "Foto Target",
-            key="cam1"
-        )
+        img1 = st.camera_input("Foto Target", key="cam1")
 
-    # PERBAIKAN 1: Sekarang "Pembanding" masuk ke dalam blok `with tab2:`
     st.subheader("Pembanding")
-
-    compare_source = st.radio(
-        "Sumber Pembanding",
-        ["Upload", "Kamera"],
-        key="compare_source"
-    )
+    compare_source = st.radio("Sumber Pembanding", ["Upload", "Kamera"], key="compare_source")
 
     if compare_source == "Upload":
-        img2 = st.file_uploader(
-            "Upload Pembanding",
-            type=["jpg", "jpeg", "png"],
-            key="img2"
-        )
+        img2 = st.file_uploader("Upload Pembanding", type=["jpg", "jpeg", "png"], key="img2")
     else:
-        img2 = st.camera_input(
-            "Foto Pembanding",
-            key="cam2"
-        )
+        img2 = st.camera_input("Foto Pembanding", key="cam2")
 
-    # PERBAIKAN 2: Logika ini dikeluarkan dari blok `else` agar jalan untuk Upload maupun Kamera
     if img1 and img2:
-
         col1, col2 = st.columns(2)
-
-        with col1:
-            st.image(img1, caption="Target")
-
-        with col2:
-            st.image(img2, caption="Pembanding")
+        with col1: st.image(img1, caption="Target")
+        with col2: st.image(img2, caption="Pembanding")
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as t1:
             t1.write(img1.getbuffer())
@@ -420,20 +271,13 @@ with tab2:
             path2 = t2.name
 
         if st.button("Bandingkan Wajah"):
-
             if not cek_wajah(path1):
                 st.error("❌ Target bukan wajah manusia.")
-
             elif not cek_wajah(path2):
                 st.error("❌ Gambar pembanding bukan wajah manusia.")
-
             else:
                 try:
-                    result = DeepFace.verify(
-                        img1_path=path1,
-                        img2_path=path2,
-                        enforce_detection=False
-                    )
+                    result = DeepFace.verify(img1_path=path1, img2_path=path2, enforce_detection=False)
                     distance = result["distance"]
 
                     if result["verified"]:
@@ -442,12 +286,9 @@ with tab2:
                         st.error("❌ Wajah Tidak Cocok")
 
                     similarity = (1 - distance) * 100
-
-                    if similarity < 0:
-                        similarity = 0
+                    if similarity < 0: similarity = 0
 
                     st.metric("Similarity Score", f"{similarity:.2f}%")
-
                     st.subheader("🤖 AI Overview")
 
                     overview = f"""
@@ -456,8 +297,6 @@ with tab2:
                     • Distance: {distance:.4f}
                     Semakin kecil nilai distance, semakin besar kemungkinan kedua
                     gambar berasal dari orang yang sama.
-                    
-                    Analisis ini hanya bersifat indikatif dan bukan bukti identitas.
                     """
                     st.info(overview)
 
@@ -465,143 +304,143 @@ with tab2:
                     st.error(f"Terjadi error: {e}")
 
 # ==================================================
-# LIVE CAMERA
+# LIVE CAMERA (TAB 3)
 # ==================================================
-
 with tab3:
-
     st.header("📷 Live Camera")
-
-    st.info(
-        "Aktifkan kamera untuk melihat video secara langsung."
-    )
+    st.info("Klik tombol 'Start' di bawah untuk mengaktifkan kamera.")
 
     webrtc_streamer(
-        key="camera"
+        key="camera-live-stream",
+        video_frame_callback=video_frame_callback,
+        rtc_configuration=RTC_CONFIGURATION,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True
     )
 
 # ==================================================
-# RIWAYAT ANALISIS
+# RIWAYAT ANALISIS (TAB 4)
 # ==================================================
-
 with tab4:
-
     st.header("📜 Riwayat Analisis")
-
     if os.path.exists("logs.csv"):
-
         df = pd.read_csv("logs.csv")
-
         page_size = 5
-
         total_rows = len(df)
+        total_pages = max(1, (total_rows + page_size - 1) // page_size)
 
-        total_pages = max(
-            1,
-            (total_rows + page_size - 1)
-            // page_size
-        )
-
-        page = st.number_input(
-            "Halaman",
-            min_value=1,
-            max_value=total_pages,
-            value=1
-        )
-
-        start_idx = (
-            page - 1
-        ) * page_size
-
+        page = st.number_input("Halaman", min_value=1, max_value=total_pages, value=1)
+        start_idx = (page - 1) * page_size
         end_idx = start_idx + page_size
 
-        st.dataframe(
-            df.iloc[start_idx:end_idx]
-        )
-
-        st.caption(
-            f"Menampilkan data {start_idx+1} - "
-            f"{min(end_idx,total_rows)} "
-            f"dari {total_rows}"
-        )
-
-        st.download_button(
-            "⬇ Download Log CSV",
-            df.to_csv(index=False),
-            "logs.csv"
-        )
-
+        st.dataframe(df.iloc[start_idx:end_idx])
+        st.caption(f"Menampilkan data {start_idx+1} - {min(end_idx, total_rows)} dari {total_rows}")
+        st.download_button("⬇ Download Log CSV", df.to_csv(index=False), "logs.csv")
     else:
-
-        st.info(
-            "Belum ada riwayat analisis."
-        )
+        st.info("Belum ada riwayat analisis.")
 
 # ==================================================
 # SOCIAL MEDIA INTELLIGENCE (SOCMINT)
 # ==================================================
-
 st.divider()
-
 st.header("🌐 Social Media Intelligence (SOCMINT)")
 st.write("Cari jejak digital target menggunakan gambar wajah atau informasi teks.")
 
 socmint_tab1, socmint_tab2 = st.tabs(["🖼️ Reverse Image Search", "🔎 Text & Dorking Search"])
 
 # -----------------------------------------
-# TAB 1: REVERSE IMAGE SEARCH (Pencarian Wajah)
+# TAB SOCMINT 1: REVERSE IMAGE SEARCH
 # -----------------------------------------
 with socmint_tab1:
     st.info(
-        "Upload foto target untuk melakukan Reverse Image Search ke mesin pencari publik. "
-        "Yandex seringkali memberikan hasil pengenalan wajah yang lebih baik untuk media sosial."
+        "Gunakan API OpenWebNinja atau mesin pencari publik untuk menemukan jejak digital wajah target."
     )
     
-    socmint_img = st.file_uploader(
-        "Upload Foto Target untuk Pencarian Jejak",
-        type=["jpg", "jpeg", "png"],
-        key="socmint_img"
-    )
+    socmint_img = st.file_uploader("Upload Foto Target", type=["jpg", "jpeg", "png"], key="socmint_img")
     
     if socmint_img:
         st.image(socmint_img, caption="Foto Target", width=300)
         
-        # Simpan gambar sementara untuk keperluan upload manual jika dibutuhkan
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as t_socmint:
             t_socmint.write(socmint_img.getbuffer())
             path_socmint = t_socmint.name
             
-        st.success("Foto siap digunakan untuk pencarian.")
-        st.write("Pilih mesin pencari di bawah ini. Anda mungkin perlu melakukan **drag-and-drop** (tarik-dan-lepas) atau mengunggah ulang foto target di jendela tab baru yang terbuka.")
+        st.success("Foto siap digunakan.")
+
+        # =====================================================
+        # FITUR BARU: API OPENWEBNINJA (REVERSE IMAGE SEARCH)
+        # =====================================================
+        st.divider()
+        st.subheader("🤖 Otomatis: Pencarian via API OpenWebNinja (RapidAPI)")
         
-        # Tombol-tombol menuju mesin pencari visual
+        api_key = st.text_input(
+            "Masukkan API Key RapidAPI Anda", 
+            type="password", 
+            help="Dapatkan key di rapidapi.com/open-web-ninja-open-web-ninja-default/api/google-lens-search"
+        )
+        
+        if st.button("🔍 Jalankan Reverse Image API"):
+            if not api_key:
+                st.warning("⚠️ Harap masukkan API Key terlebih dahulu.")
+            else:
+                with st.spinner("Mengirim gambar ke server intelijen... Mohon tunggu..."):
+                    try:
+                        # Endpoint dan Headers disesuaikan dengan standar OpenWebNinja di RapidAPI
+                        url = "https://google-lens-search.p.rapidapi.com/searchByImage"
+                        
+                        headers = {
+                            "x-rapidapi-key": api_key,
+                            "x-rapidapi-host": "google-lens-search.p.rapidapi.com"
+                        }
+                        
+                        # Mengirim gambar dalam format multipart/form-data
+                        files = {
+                            "image": open(path_socmint, "rb")
+                        }
+                        
+                        response = requests.post(url, headers=headers, files=files)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            st.success("✅ Hasil pencarian berhasil dimuat!")
+                            
+                            # Tampilkan hasil JSON secara dinamis
+                            with st.expander("Lihat Respons JSON Lengkap", expanded=False):
+                                st.json(data)
+                            
+                            # Coba ekstrak data (menyesuaikan struktur respon Google Lens)
+                            if "visual_matches" in data:
+                                st.write("**Daftar Situs yang Memuat Wajah Target:**")
+                                for item in data["visual_matches"]:
+                                    link = item.get("link", "#")
+                                    title = item.get("title", "Tidak ada judul")
+                                    st.markdown(f"- [{title}]({link})")
+                            else:
+                                st.info("Tidak ada kecocokan visual yang spesifik di respon JSON. Silakan cek data lengkap di atas.")
+
+                        else:
+                            st.error(f"❌ API Error: {response.status_code} - {response.text}")
+                    except Exception as e:
+                        st.error(f"Terjadi kesalahan saat menghubungi API: {e}")
+
+        # =====================================================
+        # PENCARIAN MANUAL (BACKUP)
+        # =====================================================
+        st.divider()
+        st.subheader("🔗 Manual: Pencarian Mesin Publik")
+        st.write("Gunakan drag-and-drop jika sistem API di atas sedang mencapai batas limit (kuota).")
+        
         col_yandex, col_google, col_bing = st.columns(3)
-        
         with col_yandex:
-            st.link_button(
-                "Cari di Yandex Images (Rekomendasi) ↗️", 
-                "https://yandex.com/images/",
-                use_container_width=True
-            )
-            
+            st.link_button("Cari di Yandex Images ↗️", "https://yandex.com/images/", use_container_width=True)
         with col_google:
-            st.link_button(
-                "Cari di Google Lens ↗️", 
-                "https://images.google.com/",
-                use_container_width=True
-            )
-            
+            st.link_button("Cari di Google Lens ↗️", "https://images.google.com/", use_container_width=True)
         with col_bing:
-            st.link_button(
-                "Cari di Bing Visual ↗️", 
-                "https://www.bing.com/images/feed",
-                use_container_width=True
-            )
-            
-        st.caption("Catatan: Batasan privasi API melarang pencarian gambar langsung ke dalam database Instagram/LinkedIn dari aplikasi eksternal. Gunakan mesin pencari di atas sebagai jembatan.")
+            st.link_button("Cari di Bing Visual ↗️", "https://www.bing.com/images/feed", use_container_width=True)
+
 
 # -----------------------------------------
-# TAB 2: TEXT & DORKING SEARCH
+# TAB SOCMINT 2: TEXT & DORKING SEARCH
 # -----------------------------------------
 with socmint_tab2:
     st.write("Gunakan teknik *Google Dorking* untuk menemukan profil media sosial berdasarkan Nama atau Username.")
@@ -611,7 +450,6 @@ with socmint_tab2:
     if nama_target:
         encoded_name = urllib.parse.quote(nama_target)
         
-        # Membuat link Dorking yang rapi
         dork_links = {
             "Google Umum": f"https://www.google.com/search?q={encoded_name}",
             "LinkedIn Profile": f"https://www.google.com/search?q={encoded_name}+site:linkedin.com/in/",
@@ -622,7 +460,5 @@ with socmint_tab2:
         }
         
         st.subheader("🔗 Hasil Generasi Link Dorking:")
-        
-        # Menampilkan link dalam bentuk tombol yang rapi
         for platform, url in dork_links.items():
             st.link_button(f"Cari di {platform}", url)
