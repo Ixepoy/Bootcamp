@@ -412,7 +412,7 @@ with socmint_tab1:
                 st.info(f"🔗 Link publik foto diperoleh: {image_url}")
                 with st.spinner("2️⃣ Mengirim foto publik ke mesin OpenWebNinja..."):
                     try:
-                        url = "https://api.openwebninja.com/reverse-image-search"
+                        url = "https://api.openwebninja.com/reverse-image-search/reverse-image-search"
                         querystring = {"url": image_url}
                         headers = {
                           "X-API-Key": "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti"
