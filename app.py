@@ -373,11 +373,7 @@ with socmint_tab1:
         st.divider()
         st.subheader("🤖 Otomatis: Pencarian via API OpenWebNinja (RapidAPI)")
         
-        api_key = st.text_input(
-            "Masukkan API Key RapidAPI Anda", 
-            type="password", 
-            help="Dapatkan key di rapidapi.com/open-web-ninja-open-web-ninja-default/api/google-lens-search"
-        )
+        api_key = "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti";
         
         if st.button("🔍 Jalankan Reverse Image API"):
             if not api_key:
@@ -386,12 +382,9 @@ with socmint_tab1:
                 with st.spinner("Mengirim gambar ke server intelijen... Mohon tunggu..."):
                     try:
                         # Endpoint dan Headers disesuaikan dengan standar OpenWebNinja di RapidAPI
-                        url = "https://google-lens-search.p.rapidapi.com/searchByImage"
+                        url = "https://api.openwebninja.com/realtime-image-search"
                         
-                        headers = {
-                            "x-rapidapi-key": api_key,
-                            "x-rapidapi-host": "google-lens-search.p.rapidapi.com"
-                        }
+                        headers = { 'x-api-key': api_key }
                         
                         # Mengirim gambar dalam format multipart/form-data
                         files = {
