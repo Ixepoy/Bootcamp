@@ -19,7 +19,7 @@ import tensorflow as tf
 from tensorflow.keras.utils import load_img, img_to_array
 import cv2
 import av
-import requests  # TAMBAHAN: Untuk memanggil API OpenWebNinja
+import requests  
 
 # =====================
 # FUNGSI DETEKSI & UTILITY
@@ -148,9 +148,6 @@ with tab1:
         image = Image.open(uploaded)
         st.image(image, width=300)
 
-        # ==============
-        # METADATA FOTO
-        # ==============
         with st.expander("📷 Lihat Metadata Foto"):
             metadata = get_exif_data(image)
             if metadata:
@@ -352,9 +349,7 @@ socmint_tab1, socmint_tab2 = st.tabs(["🖼️ Reverse Image Search", "🔎 Text
 # TAB SOCMINT 1: REVERSE IMAGE SEARCH
 # -----------------------------------------
 with socmint_tab1:
-    st.info(
-        "Gunakan API OpenWebNinja atau mesin pencari publik untuk menemukan jejak digital wajah target."
-    )
+    st.info("Gunakan API OpenWebNinja atau mesin pencari publik untuk menemukan jejak digital wajah target.")
     
     socmint_img = st.file_uploader("Upload Foto Target", type=["jpg", "jpeg", "png"], key="socmint_img")
     
@@ -374,44 +369,58 @@ with socmint_tab1:
         st.subheader("🤖 Otomatis: Pencarian via API OpenWebNinja")
         
         if st.button("🔍 Jalankan Reverse Image API"):
-            with st.spinner("Mengirim gambar ke server intelijen... Mohon tunggu..."):
+            # Langkah 1: Upload gambar sementara untuk mendapatkan URL
+            with st.spinner("1️⃣ Mengunggah foto target ke server sementara..."):
                 try:
-                    # ⚠️ GANTI URL DI BAWAH INI DENGAN ENDPOINT DARI DASHBOARD OPENWEBNINJA ANDA
-                    # Contoh format URL: "https://api.openwebninja.com/reverse-image-search/search"
-                    url = "https://api.openwebninja.com/realtime-image-search"
+                    with open(path_socmint, "rb") as f:
+                        # Catbox.moe adalah server gratis tanpa API key untuk bypass file upload lokal
+                        catbox_resp = requests.post(
+                            "https://catbox.moe/user/api.php", 
+                            data={"reqtype": "fileupload"}, 
+                            files={"fileToUpload": f}
+                        )
                     
-                    headers = { 'x-api-key': "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti" }
-                    
-                    files = {
-                        "image": open(path_socmint, "rb")
-                    }
-                    
-                    # Eksekusi API Upload
-                    response = requests.post(url, headers=headers, files=files)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        st.success("✅ Hasil pencarian berhasil dimuat!")
+                    if catbox_resp.status_code == 200:
+                        image_url = catbox_resp.text.strip()
+                        st.info(f"Link publik foto target: {image_url}")
                         
-                        # Menampilkan JSON murni agar Anda bisa melihat datanya
-                        with st.expander("Lihat Respons JSON Lengkap", expanded=False):
-                            st.json(data)
+                        st.success("2️⃣ Mengirim foto publik ke mesin OpenWebNinja...")
                         
-                        # Mengekstrak data Visual Matches 
-                        response_data = data.get("data", data) # Antisipasi struktur data bersarang
-                        if "visual_matches" in response_data:
-                            st.write("**Daftar Situs yang Memuat Wajah Target:**")
-                            for item in response_data["visual_matches"]:
-                                link = item.get("link", "#")
-                                title = item.get("title", "Tidak ada judul")
-                                st.markdown(f"- [{title}]({link})")
+                        # Langkah 2: Panggil OpenWebNinja menggunakan metode GET
+                        # Mengubah endpoint ke standar Reverse Image Google Lens OpenWebNinja
+                        url = "https://api.openwebninja.com/google-lens"
+                        
+                        querystring = {"url": image_url}
+                        headers = {
+                            "x-api-key": "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti"
+                        }
+                        
+                        response = requests.get(url, headers=headers, params=querystring)
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            st.success("✅ Hasil pencarian berhasil dimuat!")
+                            
+                            with st.expander("Lihat Respons JSON Lengkap", expanded=False):
+                                st.json(data)
+                                
+                            # Mengekstrak hasil Google Lens
+                            result_data = data.get("data", data)
+                            if "visual_matches" in result_data:
+                                st.write("**Daftar Situs yang Memuat Wajah Target:**")
+                                for item in result_data["visual_matches"]:
+                                    link = item.get("link", "#")
+                                    title = item.get("title", "Tidak ada judul")
+                                    st.markdown(f"- [{title}]({link})")
+                            else:
+                                st.info("Tidak ada kecocokan situs web spesifik di respon API.")
                         else:
-                            st.info("Tidak ada kecocokan visual spesifik di respon JSON. Silakan cek detail JSON di atas.")
-
+                            st.error(f"❌ API Error OpenWebNinja: {response.status_code} - {response.text}")
                     else:
-                        st.error(f"❌ API Error: {response.status_code} - {response.text}")
+                        st.error("Gagal mendapatkan link gambar publik dari server sementara.")
+                
                 except Exception as e:
-                    st.error(f"Terjadi kesalahan saat menghubungi API: {e}")
+                    st.error(f"Terjadi kesalahan sistem: {e}")
 
         # =====================================================
         # PENCARIAN MANUAL (BACKUP)
