@@ -422,22 +422,37 @@ with socmint_tab1:
                         if response.status_code == 200:
                             data = response.json()
                             
-                            # Mengekstrak hasil Google Lens
+                            # Mengekstrak hasil dari JSON yang strukturnya dinamis
                             result_data = data.get("data", data)
-                            if "visual_matches" in result_data and len(result_data["visual_matches"]) > 0:
+                            matches = []
+                            
+                            # Logika pintar untuk menarik data array meskipun nama key-nya kosong ("")
+                            if isinstance(result_data, dict):
+                                if "visual_matches" in result_data:
+                                    matches = result_data["visual_matches"]
+                                elif "" in result_data and isinstance(result_data[""], list):
+                                    matches = result_data[""]
+                                else:
+                                    # Fallback: Cari array/list apa pun di dalam data
+                                    for key, value in result_data.items():
+                                        if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
+                                            matches.extend(value)
+                            elif isinstance(result_data, list):
+                                matches = result_data
+
+                            if matches:
+                                st.success(f"✅ Pelacakan Selesai! Ditemukan {len(matches)} jejak digital.")
+                                st.subheader("🌐 Website yang memiliki gambar serupa")
                                 
-                                st.success(f"✅ Pelacakan Selesai! Ditemukan {len(result_data['visual_matches'])} jejak digital.")
-                                st.subheader("🎯 Hasil Temuan Target")
-                                
-                                # PERUBAHAN UI: Menampilkan dalam bentuk modern list/card
-                                for item in result_data["visual_matches"]:
-                                    link = item.get("link", "#")
+                                # Menampilkan dalam bentuk modern list/card
+                                for item in matches:
+                                    link = item.get("link", item.get("url", "#"))
                                     title = item.get("title", "Tidak ada judul")
-                                    thumbnail = item.get("thumbnail", "")
+                                    thumbnail = item.get("thumbnail", item.get("image", ""))
                                     
                                     # Mengambil nama domain website secara rapi
                                     domain_source = urllib.parse.urlparse(link).netloc
-                                    source = item.get("source", domain_source)
+                                    source = item.get("source", item.get("domain", domain_source))
                                     
                                     # Membuat antarmuka bergaya "Card" dengan container bergaris
                                     with st.container(border=True):
@@ -452,7 +467,7 @@ with socmint_tab1:
                                         with col_info:
                                             st.markdown(f"**{title}**")
                                             st.caption(f"Sumber: `{source}`")
-                                            # Membuat tombol full-width seperti di Yandex/Google Lens
+                                            # Membuat tombol full-width
                                             st.link_button("Kunjungi Situs Pelacakan ↗️", link, use_container_width=True)
                             else:
                                 st.info("Tidak ada kecocokan situs web spesifik di respon API.")
