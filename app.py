@@ -18,9 +18,11 @@ import tensorflow as tf
 from tensorflow.keras.utils import load_img, img_to_array
 import cv2
 import av
-import requests  
+import requests
 
-# Inisialisasi Session State untuk menyimpan hasil pencarian API
+# ==========================================
+# INISIALISASI SESSION STATE
+# ==========================================
 if "socmint_results" not in st.session_state:
     st.session_state.socmint_results = []
 
@@ -435,7 +437,6 @@ with socmint_tab1:
                                 # SIMPAN KE SESSION STATE
                                 st.session_state.socmint_results = matches
                                 st.success(f"✅ Pelacakan Selesai! Mengambil {len(matches)} jejak digital.")
-                                st.rerun()  # Muat ulang UI untuk memunculkan panel filter & hasil
                             else:
                                 st.info("Tidak ada kecocokan situs web spesifik di respon API.")
                         else:
@@ -445,109 +446,110 @@ with socmint_tab1:
             else:
                 st.error("❌ Semua server unggah gambar sementara gagal merespon.")
 
-        # =====================================================
-        # MENAMPILKAN HASIL DENGAN FILTER & PAGINATION
-        # =====================================================
-        if len(st.session_state.socmint_results) > 0:
-            st.divider()
-            st.subheader("🌐 Hasil Pencarian Digital")
-            
-            # --- BAR PENCARIAN & FILTER ---
-            col_search, col_filter = st.columns([2, 1])
-            with col_search:
-                search_query = st.text_input("🔍 Cari *keyword* pada Judul atau URL:")
-            with col_filter:
-                filter_option = st.selectbox("📌 Filter Platform:", [
-                    "Semua", "Instagram", "Facebook", "X (Twitter)", 
-                    "LinkedIn", "TikTok", "Non-Social Media"
-                ])
-
-            # --- LOGIKA FILTERING ---
-            all_matches = st.session_state.socmint_results
-            filtered_matches = []
-            
-            social_domains = ["instagram.com", "facebook.com", "twitter.com", "x.com", "linkedin.com", "tiktok.com"]
-
-            for item in all_matches:
-                link = item.get("link", item.get("url", "")).lower()
-                title = item.get("title", "Tidak ada judul").lower()
-
-                # Filter text (search bar)
-                if search_query and search_query.lower() not in link and search_query.lower() not in title:
-                    continue
-
-                # Filter dropdown platform
-                is_social = any(soc in link for soc in social_domains)
-                
-                if filter_option == "Instagram" and "instagram.com" not in link: continue
-                if filter_option == "Facebook" and "facebook.com" not in link: continue
-                if filter_option == "X (Twitter)" and not ("twitter.com" in link or "x.com" in link): continue
-                if filter_option == "LinkedIn" and "linkedin.com" not in link: continue
-                if filter_option == "TikTok" and "tiktok.com" not in link: continue
-                if filter_option == "Non-Social Media" and is_social: continue
-
-                filtered_matches.append(item)
-
-            # --- PAGINASI (PAGINATION) ---
-            items_per_page = 10
-            total_items = len(filtered_matches)
-            
-            if total_items == 0:
-                st.warning("Pencarian/Filter tidak menemukan hasil yang cocok.")
-            else:
-                total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
-                
-                # Navigasi Halaman
-                page = st.number_input(f"Pilih Halaman (Total {total_pages} Hal.)", min_value=1, max_value=total_pages, value=1)
-                start_idx = (page - 1) * items_per_page
-                end_idx = start_idx + items_per_page
-                
-                current_items = filtered_matches[start_idx:end_idx]
-                
-                st.caption(f"Menampilkan {start_idx+1}-{min(end_idx, total_items)} dari {total_items} data spesifik.")
-                
-                # --- RENDER CARD ---
-                for item in current_items:
-                    link = item.get("link", item.get("url", "#"))
-                    title = item.get("title", "Tidak ada judul")
-                    thumbnail = item.get("thumbnail", item.get("image", ""))
-                    
-                    domain_source = urllib.parse.urlparse(link).netloc
-                    source = item.get("source", item.get("domain", domain_source))
-                    
-                    with st.container(border=True):
-                        col_img, col_info = st.columns([1, 5])
-                        
-                        with col_img:
-                            if thumbnail:
-                                st.image(thumbnail, use_container_width=True)
-                            else:
-                                st.markdown("<h3>🌐</h3>", unsafe_allow_html=True)
-                                
-                        with col_info:
-                            st.markdown(f"**{title}**")
-                            st.caption(f"Sumber: `{source}`")
-                            st.link_button("Kunjungi Situs Pelacakan ↗️", link, use_container_width=True)
-                            
-            if st.button("🗑️ Bersihkan Hasil Pencarian"):
-                st.session_state.socmint_results = []
-                st.rerun()
-
-        # =====================================================
-        # PENCARIAN MANUAL (BACKUP)
-        # =====================================================
+    # =====================================================
+    # MENAMPILKAN HASIL DENGAN FILTER & PAGINATION 
+    # (Di luar fungsi button agar tidak ter-reset)
+    # =====================================================
+    if len(st.session_state.socmint_results) > 0:
         st.divider()
-        st.subheader("🔗 Manual: Pencarian Mesin Publik")
-        st.write("Gunakan drag-and-drop jika sistem API di atas sedang mencapai batas limit (kuota).")
+        st.subheader("🌐 Hasil Pencarian Digital")
         
-        col_yandex, col_google, col_bing = st.columns(3)
-        with col_yandex:
-            st.link_button("Cari di Yandex Images ↗️", "https://yandex.com/images/", use_container_width=True)
-        with col_google:
-            st.link_button("Cari di Google Lens ↗️", "https://images.google.com/", use_container_width=True)
-        with col_bing:
-            st.link_button("Cari di Bing Visual ↗️", "https://www.bing.com/images/feed", use_container_width=True)
+        # --- BAR PENCARIAN & FILTER ---
+        col_search, col_filter = st.columns([2, 1])
+        with col_search:
+            search_query = st.text_input("🔍 Cari *keyword* pada Judul atau URL:")
+        with col_filter:
+            filter_option = st.selectbox("📌 Filter Platform:", [
+                "Semua", "Instagram", "Facebook", "X (Twitter)", 
+                "LinkedIn", "TikTok", "Non-Social Media"
+            ])
+
+        # --- LOGIKA FILTERING ---
+        all_matches = st.session_state.socmint_results
+        filtered_matches = []
+        
+        social_domains = ["instagram.com", "facebook.com", "twitter.com", "x.com", "linkedin.com", "tiktok.com"]
+
+        for item in all_matches:
+            link = item.get("link", item.get("url", "")).lower()
+            title = item.get("title", "Tidak ada judul").lower()
+
+            # Filter text (search bar)
+            if search_query and search_query.lower() not in link and search_query.lower() not in title:
+                continue
+
+            # Filter dropdown platform
+            is_social = any(soc in link for soc in social_domains)
             
+            if filter_option == "Instagram" and "instagram.com" not in link: continue
+            if filter_option == "Facebook" and "facebook.com" not in link: continue
+            if filter_option == "X (Twitter)" and not ("twitter.com" in link or "x.com" in link): continue
+            if filter_option == "LinkedIn" and "linkedin.com" not in link: continue
+            if filter_option == "TikTok" and "tiktok.com" not in link: continue
+            if filter_option == "Non-Social Media" and is_social: continue
+
+            filtered_matches.append(item)
+
+        # --- PAGINASI (PAGINATION) ---
+        items_per_page = 10
+        total_items = len(filtered_matches)
+        
+        if total_items == 0:
+            st.warning("Pencarian/Filter tidak menemukan hasil yang cocok.")
+        else:
+            total_pages = max(1, (total_items + items_per_page - 1) // items_per_page)
+            
+            # Navigasi Halaman
+            page = st.number_input(f"Pilih Halaman (Total {total_pages} Hal.)", min_value=1, max_value=total_pages, value=1)
+            start_idx = (page - 1) * items_per_page
+            end_idx = start_idx + items_per_page
+            
+            current_items = filtered_matches[start_idx:end_idx]
+            
+            st.caption(f"Menampilkan {start_idx+1}-{min(end_idx, total_items)} dari {total_items} data spesifik.")
+            
+            # --- RENDER CARD ---
+            for item in current_items:
+                link = item.get("link", item.get("url", "#"))
+                title = item.get("title", "Tidak ada judul")
+                thumbnail = item.get("thumbnail", item.get("image", ""))
+                
+                domain_source = urllib.parse.urlparse(link).netloc
+                source = item.get("source", item.get("domain", domain_source))
+                
+                with st.container(border=True):
+                    col_img, col_info = st.columns([1, 5])
+                    
+                    with col_img:
+                        if thumbnail:
+                            st.image(thumbnail, use_container_width=True)
+                        else:
+                            st.markdown("<h3>🌐</h3>", unsafe_allow_html=True)
+                            
+                    with col_info:
+                        st.markdown(f"**{title}**")
+                        st.caption(f"Sumber: `{source}`")
+                        st.link_button("Kunjungi Situs Pelacakan ↗️", link, use_container_width=True)
+                        
+        if st.button("🗑️ Bersihkan Hasil Pencarian"):
+            st.session_state.socmint_results = []
+            st.rerun()
+
+    # =====================================================
+    # PENCARIAN MANUAL (BACKUP)
+    # =====================================================
+    st.divider()
+    st.subheader("🔗 Manual: Pencarian Mesin Publik")
+    st.write("Gunakan drag-and-drop jika sistem API di atas sedang mencapai batas limit (kuota).")
+    
+    col_yandex, col_google, col_bing = st.columns(3)
+    with col_yandex:
+        st.link_button("Cari di Yandex Images ↗️", "https://yandex.com/images/", use_container_width=True)
+    with col_google:
+        st.link_button("Cari di Google Lens ↗️", "https://images.google.com/", use_container_width=True)
+    with col_bing:
+        st.link_button("Cari di Bing Visual ↗️", "https://www.bing.com/images/feed", use_container_width=True)
+        
 
 # -----------------------------------------
 # TAB SOCMINT 2: TEXT & DORKING SEARCH
