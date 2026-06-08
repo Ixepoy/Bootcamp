@@ -176,7 +176,6 @@ with tab1:
                     with col1: st.metric("Umur", data["age"])
                     with col2: st.metric("Gender", data["dominant_gender"])
                     with col3: st.metric("Emosi", data["dominant_emotion"])
-                    with col4: st.metric("Status Masker", status_masker)
 
                     st.subheader("🤖 AI Overview")
                     overview = f"""
@@ -184,7 +183,7 @@ with tab1:
                     • Umur diperkirakan sekitar {data['age']} tahun.
                     • Gender dominan terdeteksi sebagai {data['dominant_gender']}.
                     • Emosi dominan yang terlihat adalah {data['dominant_emotion']}.
-                    • Status Masker: {status_masker}.
+                
                     
                     Catatan: Hasil ini merupakan estimasi AI dan tidak dapat digunakan
                     untuk mengidentifikasi identitas seseorang secara pasti.
