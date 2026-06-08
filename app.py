@@ -256,7 +256,11 @@ with tab2:
                     distance = result["distance"]
 
                     if result["verified"]:
-                        st.success("✅ Wajah Cocok")
+                        tempsiml = similarity:.2f
+                        if tempsiml > 80 :
+                            st.success("✅ Wajah Cocok")
+                        else:
+                            st.error("❌ Wajah Tidak Cocok")
                     else:
                         st.error("❌ Wajah Tidak Cocok")
 
