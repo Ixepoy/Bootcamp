@@ -378,7 +378,7 @@ with socmint_tab1:
                 try:
                     # ⚠️ GANTI URL DI BAWAH INI DENGAN ENDPOINT DARI DASHBOARD OPENWEBNINJA ANDA
                     # Contoh format URL: "https://api.openwebninja.com/reverse-image-search/search"
-                    url = "https://api.openwebninja.com/MASUKKAN_NAMA_ENDPOINT_YANG_BENAR"
+                    url = "https://api.openwebninja.com/realtime-image-search"
                     
                     headers = { 'x-api-key': "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti" }
                     
