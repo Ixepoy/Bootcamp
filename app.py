@@ -363,39 +363,62 @@ with socmint_tab1:
         st.success("Foto siap digunakan.")
 
         # =====================================================
-        # FITUR BARU: API OPENWEBNINJA (REVERSE IMAGE SEARCH)
+        # FITUR UTAMA: API OPENWEBNINJA DENGAN MULTI-UPLOAD FALLBACK
         # =====================================================
         st.divider()
         st.subheader("🤖 Otomatis: Pencarian via API OpenWebNinja")
         
         if st.button("🔍 Jalankan Reverse Image API"):
-            # Langkah 1: Upload gambar sementara untuk mendapatkan URL
-            with st.spinner("1️⃣ Mengunggah foto target ke server sementara..."):
+            image_url = None
+            
+            # --- TAHAP 1: PROSES UPLOAD MULTI-SERVER ---
+            with st.spinner("1️⃣ Mengunggah foto target ke server cadangan sementara..."):
+                
+                # Kandidat 1: Tmpfiles.org (Sangat Stabil & Jarang Blokir)
                 try:
                     with open(path_socmint, "rb") as f:
-                        # Catbox.moe adalah server gratis tanpa API key untuk bypass file upload lokal
-                        catbox_resp = requests.post(
-                            "https://catbox.moe/user/api.php", 
-                            data={"reqtype": "fileupload"}, 
-                            files={"fileToUpload": f}
-                        )
-                    
-                    if catbox_resp.status_code == 200:
-                        image_url = catbox_resp.text.strip()
-                        st.info(f"Link publik foto target: {image_url}")
-                        
-                        st.success("2️⃣ Mengirim foto publik ke mesin OpenWebNinja...")
-                        
-                        # Langkah 2: Panggil OpenWebNinja menggunakan metode GET
-                        # Mengubah endpoint ke standar Reverse Image Google Lens OpenWebNinja
+                        resp = requests.post("https://tmpfiles.org/api/v1/upload", files={"file": f}, timeout=10)
+                        if resp.status_code == 200:
+                            res_json = resp.json()
+                            raw_url = res_json.get("data", {}).get("url", "")
+                            if raw_url:
+                                # Konversi URL view biasa menjadi URL direct download/raw file
+                                image_url = raw_url.replace("https://tmpfiles.org/", "https://tmpfiles.org/dl/")
+                except Exception as e:
+                    pass # Lanjut ke server berikutnya jika gagal
+                
+                # Kandidat 2: Catbox.moe (Digunakan jika Tmpfiles gagal)
+                if not image_url:
+                    try:
+                        with open(path_socmint, "rb") as f:
+                            resp = requests.post("https://catbox.moe/user/api.php", data={"reqtype": "fileupload"}, files={"fileToUpload": f}, timeout=10)
+                            if resp.status_code == 200 and "https://" in resp.text:
+                                image_url = resp.text.strip()
+                    except Exception as e:
+                        pass
+
+                # Kandidat 3: File.io (Pertahanan terakhir, file langsung terhapus setelah 1x dibaca OpenWebNinja)
+                if not image_url:
+                    try:
+                        with open(path_socmint, "rb") as f:
+                            resp = requests.post("https://file.io", files={"file": f}, timeout=10)
+                            if resp.status_code == 200:
+                                image_url = resp.json().get("link")
+                    except Exception as e:
+                        pass
+
+            # --- TAHAP 2: KIRIM URL KE OPENWEBNINJA ---
+            if image_url:
+                st.info(f"🔗 Link publik foto diperoleh: {image_url}")
+                with st.spinner("2️⃣ Mengirim foto publik ke mesin OpenWebNinja..."):
+                    try:
                         url = "https://api.openwebninja.com/google-lens"
-                        
                         querystring = {"url": image_url}
                         headers = {
                             "x-api-key": "ak_av7ckg8ff8r1o0xmj7xulsl6w2s5a7nruyjmhox40xx1lti"
                         }
                         
-                        response = requests.get(url, headers=headers, params=querystring)
+                        response = requests.get(url, headers=headers, params=querystring, timeout=20)
                         
                         if response.status_code == 200:
                             data = response.json()
@@ -416,11 +439,11 @@ with socmint_tab1:
                                 st.info("Tidak ada kecocokan situs web spesifik di respon API.")
                         else:
                             st.error(f"❌ API Error OpenWebNinja: {response.status_code} - {response.text}")
-                    else:
-                        st.error("Gagal mendapatkan link gambar publik dari server sementara.")
-                
-                except Exception as e:
-                    st.error(f"Terjadi kesalahan sistem: {e}")
+                    
+                    except Exception as e:
+                        st.error(f"Terjadi kesalahan saat memproses OpenWebNinja: {e}")
+            else:
+                st.error("❌ Semua server unggah gambar sementara (Tmpfiles, Catbox, File.io) gagal merespon. Silakan periksa koneksi internet Anda atau gunakan pencarian manual di bawah.")
 
         # =====================================================
         # PENCARIAN MANUAL (BACKUP)
@@ -436,7 +459,7 @@ with socmint_tab1:
             st.link_button("Cari di Google Lens ↗️", "https://images.google.com/", use_container_width=True)
         with col_bing:
             st.link_button("Cari di Bing Visual ↗️", "https://www.bing.com/images/feed", use_container_width=True)
-
+            
 
 # -----------------------------------------
 # TAB SOCMINT 2: TEXT & DORKING SEARCH
