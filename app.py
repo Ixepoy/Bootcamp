@@ -162,10 +162,14 @@ with tab1:
                             img_array = img_array / 255.0
 
                             prediction = mask_model.predict(img_array, verbose=0)
-                            if prediction[0][0] > 0.5:
+                            prob = prediction[0][0]
+                            if prob > 0.5:
                                 status_masker = "Tanpa Masker ❌"
+                                confidence = prob * 100
                             else:
                                 status_masker = "Menggunakan Masker 😷"
+                                confidence = (1 - prob) * 100
+                            st.metric("Deteksi Masker", f"{status_masker} ({confidence:.2f}%)")
                         except Exception as e:
                             status_masker = "Gagal Deteksi"
                             st.warning(f"AI Masker melewati gambar ini. Info: {e}")
